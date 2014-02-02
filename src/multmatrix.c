@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <omp.h>
 #include <string.h>
 #include <errno.h>
 #include </usr/include/semaphore.h>
@@ -34,7 +35,14 @@ typedef struct {
     sem_t mutex;
 } sbuf_t;
 
+typedef struct {
+	int qtd_files;
+	int read_complete;
+	sem_t mutex;
+} flags_t;
+
 sbuf_t shared[5];
+flags_t flags;
 
 void escreveMatrixArquivo(FILE *f, double **m, int ordem)
 {
@@ -62,22 +70,52 @@ void destruir(s_t *s)
 	}
 }
 
+/*
+Extra 6.
+
+LA foi modificado para somente disponibilizar o último item produzido após 
+marcar a flag de fim de leitura. Pois as vezes EA consumia todos os itens antes 
+de LA setar a flag, nesse caso EA ficavara parada aguardando um novo item e 
+nunca descobria que a leitura já havia terminado. 
+Com essa modificação isso não ocorre pois como o flag é setado antes do último 
+item, quando EA estiver consumindo o último item com certeza a flag já estará 
+setada.
+
+Para implementar isso, alterei para que cada item seja disponibilizado no 
+próximo passo do loop de leitura do arquivo, dessa forma o último é 
+disponibilizado fora do loop, momento onde a leitura já terminou, assim consigo 
+setar a flag primeiro.
+*/
+
 void *la(void *arg)
 {
 	FILE *f;
+	s_t *s;
 	char nome[255];
 	f = fopen("bin/entrada.in", "r");
-	for(int i=0; i<25; i++)
-	{
-		s_t *s;
+	
+	int qtd_files = 0;
+	while(fgets(nome, 255, f) != NULL)
+	{	
 		FILE *fp;
 		int size;
 		
+		if(qtd_files > 0)
+		{
+				//Disponibiliza o item produzido no loop anterior
+				//Semáforos de compartilhamento com MM
+				sem_wait(&shared[0].empty);
+				sem_wait(&shared[0].mutex);
+				shared[0].buf[shared[0].in] = s;
+				shared[0].in = (shared[0].in+1)%BUFF_SIZE;
+				sem_post(&shared[0].mutex);
+				sem_post(&shared[0].full);
+		}
+		
+		qtd_files++;
+		
 		//Cria dinamicamente s
 		s = (s_t*) malloc(sizeof(s_t));
-		
-		//Le o nome do arquivo
-		fgets(nome, 255, f);
 		
 		//Salva o nome do arquivo em s
 		size = strlen(nome);
@@ -125,16 +163,25 @@ void *la(void *arg)
 		
 		//Fecha o arquivo de entrada
 		fclose(fp);
-		
-		//Semáforos de compartilhamento com MM
-    sem_wait(&shared[0].empty);
-    sem_wait(&shared[0].mutex);
-    shared[0].buf[shared[0].in] = s;
-    shared[0].in = (shared[0].in+1)%BUFF_SIZE;
-    sem_post(&shared[0].mutex);
-    sem_post(&shared[0].full);
 	}
 	fclose(f);
+	
+	//Semáforos das flags
+	//Sinaliza o fim da leitura e a quantidade arquivos antes de disponibilizar o último item
+	sem_wait(&flags.mutex);
+	flags.read_complete = 1;
+	flags.qtd_files = qtd_files;
+	sem_post(&flags.mutex);
+	
+	//Disponibiliza o último item produzido
+	//Semáforos de compartilhamento com MM
+  sem_wait(&shared[0].empty);
+  sem_wait(&shared[0].mutex);
+  shared[0].buf[shared[0].in] = s;
+  shared[0].in = (shared[0].in+1)%BUFF_SIZE;
+  sem_post(&shared[0].mutex);
+  sem_post(&shared[0].full);
+	
 	return NULL;
 }
 
@@ -150,8 +197,9 @@ void *mm(void *arg)
       shared[0].out = (shared[0].out+1)%BUFF_SIZE;
       sem_post(&shared[0].mutex);
       sem_post(&shared[0].empty);
-   	
+			
    		//Processa
+   		//#pragma omp parallel for private(th_id) num_threads(6)
 			for(int i = 0; i < item->ordem; i++)
 			{
 				for(int j = 0; j < item->ordem; j++)
@@ -244,9 +292,26 @@ void *ea(void *arg)
 {
     s_t *item;
     FILE *f;
+    int qtd = 0;
+    int total = -1;
     f = fopen("bin/saida.out", "w");
-    for (int i=0; i < 25; i++) 
+		
+    while(1) 
     {
+    	//Semáforos das flags
+			sem_wait(&flags.mutex);
+			if(flags.read_complete == 1)
+			{
+				total = flags.qtd_files;
+			}
+			sem_post(&flags.mutex);
+			if(total != -1 && qtd >= total)
+			{
+				break;
+			}
+			
+			qtd++;
+    	 
 		  //Semáforos de compartilhamento com CF
 		  sem_wait(&shared[3].full);
 		  sem_wait(&shared[3].mutex);
@@ -280,6 +345,8 @@ int main()
 {
   pthread_t idLa, idMm, idSc, idCf, idEa;
 
+	
+
 	//Inicia os semáforos
   sem_init(&shared[0].full, 0, 0);
   sem_init(&shared[0].empty, 0, BUFF_SIZE);
@@ -293,6 +360,10 @@ int main()
   sem_init(&shared[3].full, 0, 0);
   sem_init(&shared[3].empty, 0, BUFF_SIZE);
   sem_init(&shared[3].mutex, 0, 1);
+  
+  sem_init(&flags.mutex, 0, 1);
+  flags.qtd_files = 0;
+  flags.read_complete = 0;
   
   //Cria a thread LA
   pthread_create(&idLa, NULL, la, NULL);

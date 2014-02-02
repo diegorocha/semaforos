@@ -1,12 +1,12 @@
 all: clean build
 
 bin/multmatrix:
-		gcc src/multmatrix.c -pthread -std=c99 -lm -o3 -o bin/multmatrix
+		gcc src/multmatrix.c -pthread -fopenmp -std=c99 -lm -o3 -o bin/multmatrix
 
 build: bin/multmatrix
 
 build-debug: clean
-		gcc src/multmatrix.c -DDEBUG -pthread -std=c99 -lm -g -o bin/multmatrix
+		gcc src/multmatrix.c -DDEBUG -pthread -fopenmp -std=c99 -lm -g -o bin/multmatrix
 
 clean:
 		rm -f bin/multmatrix
