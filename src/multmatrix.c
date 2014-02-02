@@ -26,7 +26,7 @@ typedef struct {
 } s_t;
 
 typedef struct {
-    s_t buf[BUFF_SIZE];
+    s_t *buf[BUFF_SIZE];
     int in;
     int out;
     sem_t full;
@@ -47,6 +47,19 @@ void destruir(s_t *s)
 		free(s->v);
 		free(s);
 	}
+}
+
+void escreveMatrixArquivo(FILE *f, double **m, int ordem)
+{
+	for(int i = 0; i < ordem; i++)
+  {
+  	for(int j = 0; j < ordem; j++)
+  	{
+  		fprintf(f, "%lf ", m[i][j]);
+  	}
+  	fputs("\n", f);
+  }
+  fputs("--------------------------------\n", f);
 }
 
 void *la(void *arg)
@@ -71,7 +84,6 @@ void *la(void *arg)
 		strncpy(s->nome, nome, size-1);
 		
 		//Abre o arquivo de entrada
-		//printf("Abrindo: %s\n", s->nome);
 		fp = fopen(s->nome, "r");
 
 		//Lê a ordem das matrizes
@@ -116,7 +128,7 @@ void *la(void *arg)
 		//Semáforos de compartilhamento com MM
     sem_wait(&shared[0].empty);
     sem_wait(&shared[0].mutex);
-    shared[0].buf[shared[0].in] = *s;
+    shared[0].buf[shared[0].in] = s;
     shared[0].in = (shared[0].in+1)%BUFF_SIZE;
     sem_post(&shared[0].mutex);
     sem_post(&shared[0].full);
@@ -127,7 +139,7 @@ void *la(void *arg)
 
 void *mm(void *arg)
 {
-    s_t item;
+    s_t *item;
     while(1) 
     {
     	//Semáforos de compartilhamento com LA
@@ -139,14 +151,14 @@ void *mm(void *arg)
       sem_post(&shared[0].empty);
    	
    		//Processa
-			for(int i = 0; i < item.ordem; i++)
+			for(int i = 0; i < item->ordem; i++)
 			{
-				for(int j = 0; j < item.ordem; j++)
+				for(int j = 0; j < item->ordem; j++)
 				{
-				  item.c[i][j] = 0;
-				  for(int k = 0; k< item.ordem; k++)
+				  item->c[i][j] = 0;
+				  for(int k = 0; k< item->ordem; k++)
 				  {
-				      item.c[i][j] += item.a[i][k] * item.b[k][j];
+				      item->c[i][j] += item->a[i][k] * item->b[k][j];
 				  }
 				}
 			}
@@ -164,7 +176,7 @@ void *mm(void *arg)
 
 void *sc(void *arg)
 {
-    s_t item;
+    s_t *item;
     while(1) 
     {
     
@@ -177,12 +189,12 @@ void *sc(void *arg)
       sem_post(&shared[1].empty);
 
 			//Processa
-			for(int i=0; i < item.ordem; i++)
+			for(int i=0; i < item->ordem; i++)
 			{
-				item.v[i] = 0;
-				for(int j=0; j < item.ordem; j++)
+				item->v[i] = 0;
+				for(int j=0; j < item->ordem; j++)
 				{
-					item.v[i] += item.c[j][i];
+					item->v[i] += item->c[j][i];
 				}
 			}
 
@@ -199,7 +211,7 @@ void *sc(void *arg)
 
 void *cf(void *arg)
 {
-    s_t item;
+    s_t *item;
     while(1) 
     {
     	//Semáforos de compartilhamento com SC
@@ -211,10 +223,10 @@ void *cf(void *arg)
       sem_post(&shared[2].empty);
 			
 			//Processa
-			item.e = 0;
-			for(int i=0; i < item.ordem; i++)
+			item->e = 0;
+			for(int i=0; i < item->ordem; i++)
 			{
-				item.e += item.v[i];
+				item->e += item->v[i];
 			}
 
 			//Semáforos de compartilhamento com EA
@@ -230,7 +242,7 @@ void *cf(void *arg)
 
 void *ea(void *arg)
 {
-    s_t item;
+    s_t *item;
     FILE *f;
     f = fopen("bin/saida.out", "w");
     for (int i=0; i < 25; i++) 
@@ -244,40 +256,18 @@ void *ea(void *arg)
 		  sem_post(&shared[3].empty);
 		  
 		  //Escreve no arquivo de saida
-		  fprintf(f, "%s - %d\n--------------------------------\n", item.nome, item.ordem);
-		  for(int i=0; i < item.ordem; i++)
+		  fprintf(f, "%s - %d\n--------------------------------\n", item->nome, item->ordem);
+		  escreveMatrixArquivo(f, item->a, item->ordem);
+		  escreveMatrixArquivo(f, item->b, item->ordem);
+		  escreveMatrixArquivo(f, item->c, item->ordem);
+		  for(int i=0; i < item->ordem; i++)
 		  {
-		  	for(int j=0; j< item.ordem; j++)
-		  	{
-		  		fprintf(f, "%lf ", item.a[i][j]);
-		  	}
-		  	fputs("\n", f);
+		  		fprintf(f, "%lf\n", item->v[i]);
 		  }
 		  fputs("--------------------------------\n", f);
-		  for(int i=0; i < item.ordem; i++)
-		  {
-		  	for(int j=0; j< item.ordem; j++)
-		  	{
-		  		fprintf(f, "%lf ", item.b[i][j]);
-		  	}
-		  	fputs("\n", f);
-		  }
-		  fputs("--------------------------------\n", f);
-		  for(int i=0; i < item.ordem; i++)
-		  {
-		  	for(int j=0; j< item.ordem; j++)
-		  	{
-		  		fprintf(f, "%lf ", item.c[i][j]);
-		  	}
-		  	fputs("\n", f);
-		  }
-		  fputs("--------------------------------\n", f);
-		  for(int i=0; i < item.ordem; i++)
-		  {
-		  		fprintf(f, "%lf\n", item.v[i]);
-		  }
-		  fputs("--------------------------------\n", f);
-		  fprintf(f, "%lf\n================================\n", item.e);
+		  fprintf(f, "%lf\n================================\n", item->e);
+		  
+		  destruir(item);
     }
     //Fecha arquivo
     fclose(f);
@@ -332,5 +322,5 @@ int main()
   pthread_join(idEa, NULL);
   
   //Encerra a execução
-	return 0;
+	return EXIT_SUCCESS;
 }
