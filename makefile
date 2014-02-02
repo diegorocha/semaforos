@@ -1,18 +1,24 @@
 all: clean build
 
-bin/countPrimos-pt-DiegoRocha-LuanAzevedo:
-		gcc src/countPrimos-pt-DiegoRocha-LuanAzevedo.c -std=c99 -lm -o3 -o bin/countPrimos-pt-DiegoRocha-LuanAzevedo
+bin/multmatrix:
+		gcc src/multmatrix.c -pthread -std=c99 -lm -o3 -o bin/multmatrix
 
-build: bin/countPrimos-pt-DiegoRocha-LuanAzevedo
+build: bin/multmatrix
 
 build-debug: clean
-		gcc src/countPrimos-pt-DiegoRocha-LuanAzevedo.c -DDEBUG -std=c99 -lm -g -o bin/countPrimos-pt-DiegoRocha-LuanAzevedo
+		gcc src/multmatrix.c -DDEBUG -pthread -std=c99 -lm -g -o bin/multmatrix
 
 clean:
-		rm -f bin/countPrimos-pt-DiegoRocha-LuanAzevedo
-		
-test: build
-		bin/countPrimos-pt-DiegoRocha-LuanAzevedo 1 10000000 10
+		rm -f bin/multmatrix
 
-debug-test: build-debug
-		gdb --args bin/countPrimos-pt-DiegoRocha-LuanAzevedo 1 10000000 10
+run: build
+		bin/multmatrix
+
+generate-files:
+		python src/createTestMatrix.py
+
+test: clean build generate-files
+		bin/multmatrix
+
+debug-test: build-debug generate-files
+		gdb bin/multmatrix
