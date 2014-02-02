@@ -36,19 +36,6 @@ typedef struct {
 
 sbuf_t shared[5];
 
-void destruir(s_t *s)
-{
-	if(s != NULL)
-	{
-		free(s->nome);
-		free(s->a);
-		free(s->b);
-		free(s->c);
-		free(s->v);
-		free(s);
-	}
-}
-
 void escreveMatrixArquivo(FILE *f, double **m, int ordem)
 {
 	for(int i = 0; i < ordem; i++)
@@ -62,6 +49,19 @@ void escreveMatrixArquivo(FILE *f, double **m, int ordem)
   fputs("--------------------------------\n", f);
 }
 
+void destruir(s_t *s)
+{
+	if(s != NULL)
+	{
+		free(s->nome);
+		free(s->a);
+		free(s->b);
+		free(s->c);
+		free(s->v);
+		free(s);
+	}
+}
+
 void *la(void *arg)
 {
 	FILE *f;
@@ -72,6 +72,7 @@ void *la(void *arg)
 		s_t *s;
 		FILE *fp;
 		int size;
+		
 		//Cria dinamicamente s
 		s = (s_t*) malloc(sizeof(s_t));
 		
@@ -179,7 +180,6 @@ void *sc(void *arg)
     s_t *item;
     while(1) 
     {
-    
     	//Semáforos de compartilhamento com MM
       sem_wait(&shared[1].full);
       sem_wait(&shared[1].mutex);
