@@ -192,9 +192,13 @@ Extra 5: Quando compilado com a opção -fopenmp o código do extra 5 é habilit
 void *mm(void *arg)
 {
 	s_t *item;
+	#ifdef _OPENMP
+	#ifdef DEBUG
 	int t_id;
 	t_id = *(int*)arg;
 	free(arg);
+	#endif
+	#endif
 	while(1)
 	{
 		//Semáforos de compartilhamento com LA
@@ -214,7 +218,7 @@ void *mm(void *arg)
 			/*Rodando na minha máquina a execução estava sempre se limitando a duas 
 			sub threads globais (OMP thread: 0 e OMP thread: 1) indepedente da 
 			MM thread, segundo o printf abaixo*/
-			printf("MM thread: %d; OMP thread: %d; %d\n", t_id, omp_get_thread_num(), omp_get_max_threads());
+			printf("MM thread: %d; OMP thread: %d; Max Threads: %d\n", t_id, omp_get_thread_num(), omp_get_max_threads());
 			#endif
 			#endif
 			#pragma omp parallel for
@@ -391,9 +395,13 @@ int main()
 	//Cria as threads MM
 	for(int i=0; i < MM_THREADS; i++)
 	{
-		int *t;
+		int *t = NULL;
+		#ifdef _OPENMP
+		#ifdef DEBUG
 		t = (int *) malloc(sizeof(int));
 		*t = i;
+		#endif
+		#endif
 		pthread_create(&idMm, NULL, mm, t);
 	}
 
